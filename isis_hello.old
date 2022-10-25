@@ -1,0 +1,999 @@
+import struct
+import time
+
+from tlvs import TLV
+import re
+from socket import socket, AF_PACKET, SOCK_RAW, SOL_SOCKET, htons
+import traceback as tb
+from tlv_protocolType import  TLV_Protocol_Supported
+from tlv_area_id import  TLV_Area_Id
+from tlv_interface_ip import TLV_interface_ip
+from tlv_p2p_adjcency_state import TLV_P2P_Adjacency_State
+from tlv_instance import TLV_Instance_Id
+import threading
+import math
+
+class SystemIdConverter:
+
+    def fromLetterReturnNumber(letter):
+        if (letter.upper() == 'A' ):
+            return 10
+        elif (letter.upper() == 'B' ):
+            return 11
+        elif (letter.upper() == 'C' ):
+            return 12
+        elif (letter.upper() == 'D' ):
+            return 13
+        elif (letter.upper() == 'E'):
+            return 14
+        elif (letter.upper() == 'F'):
+            return 15
+        else:
+            return -1
+    @classmethod
+    def divideSystemIDIntoSixBytes(cls,part):
+        firstdigit=-1
+        secondigit= 0
+        decimal=0
+        exponent=0
+        global character
+        while (firstdigit >= -2 ):
+            if (secondigit == 0):
+                character = part[firstdigit:]
+               #print (character)
+            else:
+                character = part[firstdigit:secondigit]
+            if (re.match("[A-Z]+", character)):
+                #print("char")
+                character=cls.fromLetterReturnNumber(character)
+            #print (character)
+            dec_digit = int(int(character)*(math.pow(16,exponent)))
+            decimal = decimal + dec_digit
+            firstdigit-=1
+            secondigit-=1
+            exponent+=1
+        return decimal
+        #print (decimal,part)
+
+    @classmethod
+    def convertSystemId(cls,system_id):
+        pass
+        test ="222233331111"
+        system_id_parts=[]
+        firstdigit = -2
+        seconddigit= 0
+        #print(test[-4: -2])
+        while ( firstdigit >= len(system_id) *(-1)):
+              if ( seconddigit== 0):
+                  #print (test[ firstdigit:])
+                  system_id_parts.append(cls.divideSystemIDIntoSixBytes(system_id[ firstdigit:]))
+
+              else:
+                  system_id_parts.append(cls.divideSystemIDIntoSixBytes(system_id[firstdigit:seconddigit]))
+                  #print(test[firstdigit: seconddigit])
+              seconddigit -= 2
+              firstdigit-=2
+        if (len(system_id_parts) == 6):
+            return system_id_parts[5], system_id_parts[4], system_id_parts[3],system_id_parts[2],system_id_parts[1],system_id_parts[0]
+            #self.system_id_1 = system_id_parts[5]
+            #self.system_id_2 = system_id_parts[4]
+            #self.system_id_3 = system_id_parts[3]
+            #self.system_id_4 = system_id_parts[2]
+            #self.system_id_5 = system_id_parts[1]
+            #self.system_id_6 = system_id_parts[0]
+        else:
+           raise Exception("System ID length not matching")
+           return None
+        #print (len(test) *(-1))
+
+
+class ISIS_HELLO:
+
+    def __init__(self):
+        self.tlvs=[]
+        self.holdtime = None
+        self.ckttype = None
+        self.system_id= None
+        self.priority= None
+        self.PDUlen = None
+        self.localcktid = None
+        self.system_id_1 = None
+        self.system_id_2 = None
+        self.system_id_3 = None
+        self.system_id_4 = None
+        self.system_id_5 = None
+        self.system_id_6 = None
+        self.interface_type = None
+
+        self.packet_status={
+                      'holdtime': False,
+                      'ckttype' : False,
+                      'system_id': False,
+                      'localcktid': False,
+                      'PDUlen': False,
+                      'interface_type' : False
+
+
+        }
+
+        #self.protocol_discriminator=131
+        #self.length_indicator = 27
+        #self.protocol_id=1
+    #2222.2222.2222
+    """
+    def fromLetterReturnNumber(self,letter):
+        if (letter.upper() == 'A' ):
+            return 10
+        elif (letter.upper() == 'B' ):
+            return 11
+        elif (letter.upper() == 'C' ):
+            return 12
+        elif (letter.upper() == 'D' ):
+            return 13
+        elif (letter.upper() == 'E'):
+            return 14
+        elif (letter.upper() == 'F'):
+            return 15
+        else:
+            return -1
+    def divideSystemIDIntoSixBytes(self,part):
+        firstdigit=-1
+        secondigit= 0
+        decimal=0
+        exponent=0
+        global character
+        while (firstdigit >= -2 ):
+            if (secondigit == 0):
+                character = part[firstdigit:]
+               #print (character)
+            else:
+                character = part[firstdigit:secondigit]
+            if (re.match("[A-Z]+", character)):
+                #print("char")
+                character=self.fromLetterReturnNumber(character)
+            #print (character)
+            dec_digit = int(int(character)*(math.pow(16,exponent)))
+            decimal = decimal + dec_digit
+            firstdigit-=1
+            secondigit-=1
+            exponent+=1
+        return decimal
+        #print (decimal,part)
+
+
+
+
+    def convertSystemId(self,system_id):
+        pass
+        test ="222233331111"
+        system_id_parts=[]
+        firstdigit = -2
+        seconddigit= 0
+        #print(test[-4: -2])
+        while ( firstdigit >= len(system_id) *(-1)):
+              if ( seconddigit== 0):
+                  #print (test[ firstdigit:])
+                  system_id_parts.append(self.divideSystemIDIntoSixBytes(system_id[ firstdigit:]))
+
+              else:
+                  system_id_parts.append(self.divideSystemIDIntoSixBytes(system_id[firstdigit:seconddigit]))
+                  #print(test[firstdigit: seconddigit])
+              seconddigit -= 2
+              firstdigit-=2
+        if (len(system_id_parts) == 6):
+            self.system_id_1 = system_id_parts[5]
+            self.system_id_2 = system_id_parts[4]
+            self.system_id_3 = system_id_parts[3]
+            self.system_id_4 = system_id_parts[2]
+            self.system_id_5 = system_id_parts[1]
+            self.system_id_6 = system_id_parts[0]
+        else:
+           raise Exception("System ID length not matching")
+        #print (len(test) *(-1))
+    """
+    def setInterfaceType(self,interface_type):
+        if (interface_type != "p2p"):
+            raise Exception("Interface type should be point to point, (p2p)")
+        else:
+            self.interface_type = interface_type
+            self.packet_status['interface_type'] = True
+    def setSystemId(self,system_id):
+        if (re.match("\d{4}\.\d{4}\.\d{4}",system_id)):
+            parts_sys_id=system_id.split('.')
+
+
+            self.system_id = parts_sys_id[0] + parts_sys_id[1] + parts_sys_id[2]
+            #self.system_id = self.system_id.encode('ascii')
+            self.system_id_1,self.system_id_2,self.system_id_3,self.system_id_4,self.system_id_5,self.system_id_6 =   SystemIdConverter.convertSystemId(self.system_id)
+            self.packet_status['system_id'] = True
+        else:
+            raise ValueError("System ID not correct")
+    def generateLocalCktId(self):
+        import random as rand
+        self.localcktid=int(rand.random() * 100)
+        self.packet_status['localcktid'] = True
+
+        #print (self.localcktid)
+    def setCktType(self,cktype):
+        if (cktype =='level_1' or cktype =='level_2'):
+            if (cktype == "level_1"):
+                self.ckttype = 1
+                self.packet_status['ckttype'] = True
+            else:
+                self.ckttype = 2
+                self.packet_status['ckttype'] = True
+        else:
+            raise ValueError("Level is not correct")
+
+    def setHoldTime(self,holdtime):
+        if (not isinstance(holdtime , int)):
+            raise ValueError("Hold time not an integer")
+        else:
+            if (holdtime < 1 or holdtime > 255):
+                raise ValueError("Hold time value out of range")
+            else:
+                #print("set holdtime")
+                self.holdtime = holdtime
+                self.packet_status['holdtime'] = True
+    def getHoldTime(self):
+        if (self.holdtime == None):
+            raise Exception("Holdtime not set")
+            return 0
+        else:
+            return self.holdtime
+    def setPriority(self,priority):
+        if  (priority < 1 or priority > 255):
+            raise ValueError("priority out of range")
+
+
+    def add_tlv(self,tlv):
+        for tlv1 in self.tlvs:
+            if (isinstance(tlv1,TLV_Protocol_Supported) and type(tlv1) == type(tlv)):
+                raise Exception("TLV Protocol Type already present")
+            elif(isinstance(tlv1,TLV_interface_ip) and type(tlv1) == type(tlv)):
+                raise Exception("TLV interface IP already present")
+            elif(isinstance(tlv1,TLV_P2P_Adjacency_State) and type(tlv1) == type(tlv)):
+                raise Exception("TLV point to point adjacency already present")
+            elif (isinstance(tlv1,TLV_Area_Id) and type(tlv1) == type(tlv)):
+                raise Exception("TLV area ID already present")
+
+        if (isinstance(tlv,TLV_Protocol_Supported)):
+            self.tlvs.append(tlv)
+            #print ("Add TLV Prot")
+        elif (isinstance(tlv, TLV_interface_ip)):
+            self.tlvs.append(tlv)
+            #print("Add tlv int")
+        elif (isinstance(tlv, TLV_P2P_Adjacency_State)):
+            self.tlvs.append(tlv)
+            #print("P2P adj")
+        elif (isinstance(tlv, TLV_Area_Id)):
+            self.tlvs.append(tlv)
+            #print("Add tLV aree id")
+        elif (isinstance(tlv,TLV_Instance_Id)):
+            self.tlvs.append(tlv)
+            #print("Add tLV instance id")
+        else:
+            raise Exception ("TLV not recognised")
+    def get_tlv(self,tlv_obj):
+        global found
+        found = False
+        for tlv in self.tlvs:
+            if (type(tlv) == type(tlv_obj)):
+
+               return tlv
+        return None
+
+
+
+
+    def setPDULength(self,len):
+        self.PDUlen = len
+        self.packet_status['PDUlen'] = True
+
+
+    def getPDULength(self):
+        if (self.PDUlen == None):
+            raise ValueError("PDULength is not set")
+        else:
+            return self.PDUlen
+    def populateHelloFieldsFromStream(self,stream):
+        if (len(stream) != 12):
+            raise Exception ("Hello stream is less than 12 bytes")
+        else:
+            self.ckttype, self.system_id_1,\
+            self.system_id_2, self.system_id_3, self.system_id_4, self.system_id_5,\
+            self.system_id_6, self.holdtime, self.PDUlen, self.localcktid = struct.unpack("!BBBBBBBHHB",stream)
+            self.system_id = str("{0:0=2d}".format(int(str(hex(self.system_id_1))[2:]))) +\
+                             str("{0:0=2d}".format(int(str(hex(self.system_id_2))[2:])))  + "."+ \
+                             str("{0:0=2d}".format(int(str(hex(self.system_id_3))[2:]))) + \
+                             str("{0:0=2d}".format(int(str(hex(self.system_id_4))[2:]))) + "." + \
+                             str("{0:0=2d}".format(int(str(hex(self.system_id_5))[2:]))) + \
+                             str("{0:0=2d}".format(int(str(hex(self.system_id_6))[2:])))
+            #print (self.system_id)
+
+
+
+            #print ("{0:0=2d}".format(self.system_id_1),self.system_id_2,self.system_id_3,self.system_id_4,self.system_id_5,self.system_id_6)
+            #print (self.holdtime,self.PDUlen)
+            #print(self.ckttype)
+            #print (self.system_id)
+    def getBinary(self):
+        global hellostream
+        hellostream = b''
+        #print (self.packet_status)
+        #print (self.system_id_1)
+        #print(self.system_id_2)
+        #print(self.system_id_3)
+        #print(self.system_id_4)
+        #print(self.system_id_5)
+        #print(self.system_id_6)
+        if (False in self.packet_status.values()):
+            print(self.packet_status)
+            raise ValueError( "Some of  field(s) " +  str(self.packet_status.keys())  + " is/are not set")
+
+        else:
+            hellostream= struct.pack(">BBBBBBBHHB",self.ckttype, self.system_id_1,
+                                     self.system_id_2, self.system_id_3, self.system_id_4, self.system_id_5,
+                                     self.system_id_6,self.holdtime,self.PDUlen,self.localcktid)
+            #for tlv in self.tlvs:
+                #hellostream+=tlv.getBinary()
+            return hellostream
+    def getTLVsBinary(self):
+        all_tlv_binary=b''
+        if (len(self.tlvs) == 0):
+            raise Exception("TLV list is not populated")
+        print ("LEN TLVs ", len(self.tlvs))
+        for tlv in self.tlvs:
+            if (isinstance(tlv, TLV_Protocol_Supported)):
+               all_tlv_binary+=tlv.getBinary()
+               #print ("GET PROT SUPPORTED")
+            elif (isinstance(tlv, TLV_interface_ip)):
+                all_tlv_binary+=tlv.getBinary()
+                #print("GET INT IP")
+            elif (isinstance(tlv, TLV_P2P_Adjacency_State)):
+                all_tlv_binary += tlv.getBinary()
+
+                #print("GET ADJ ", tlv.getBinary())
+            elif (isinstance(tlv, TLV_Area_Id)):
+                all_tlv_binary+=tlv.getBinary()
+                #print("AREA ID")
+            elif (isinstance(tlv, TLV_Instance_Id)):
+                all_tlv_binary += tlv.getBinary()
+                #print("INSTANCE ID")
+            #print    ( all_tlv_binary)
+        return all_tlv_binary
+
+
+class ISIS_FixHeader:
+    def __init__(self):
+        self.protocolDiscriminator = None
+        self.lengthIndicator =None
+        self.protocol_ID_extension = None
+        self.IDLength = None
+        self.protocolType = None
+        self.version = None
+        self.reserved = None
+        self.max_area_address = None
+        self.binary =  None
+        self.populated_fields_count= 0
+    def populateFixFields(self):
+        self.protocolDiscriminator = 131
+        self.lengthIndicator = 20
+        self.protocol_ID_extension = 1
+        self.IDLength = 0
+        self.protocolType = 17
+        self.version = 1
+        self.reserved = 0
+        self.max_area_address = 0
+        self.populated_fields_count = 9
+    def setPacketType(self,packet_type):
+        if (packet_type != 17):
+            raise ValueError("IS-IS packet type is wrong")
+        else:
+            self.protocolType = packet_type
+            self.populated_fields_count+=1
+    def getBinary(self):
+        if (self.populated_fields_count != 10):
+            raise Exception("One or few  fields are not populated")
+            return -1
+        else:
+            return struct.pack(">BBBBBBBB",self.protocolDiscriminator,self.lengthIndicator,self.protocol_ID_extension
+                           ,self.IDLength,self.protocolType,self.version,self.reserved,self.max_area_address)
+    def setValuesFromStream(self,stream):
+        if (len(stream) != 8):
+            raise Exception ("The fix header length is not 8 btyes")
+        else:
+            self.protocolDiscriminator, self.lengthIndicator, \
+                    self.protocol_ID_extension, self.IDLength,self.protocolType, \
+                    self.version, self.reserved,self.max_area_address = struct.unpack("BBBBBBBB",stream)
+
+
+class ETHERNET_Frame:
+    def __init__(self):
+       self.ssap =  254
+       self.dsap = 254
+       self.payload_length = None
+       self.src_mac = None
+       self.src_mac_binary=b''
+       self.dst_mac_binary=b'\x01\x00\x5e\x90\x00\x02'
+       self.control_field=3
+    def setSourceMac(self,mac_address):
+       if (":" in mac_address):
+           parts_mac =mac_address.split(":")
+           if (len(parts_mac) == 6):
+               if (self.parse_MacAddress(parts_mac) == True):
+                   raise Exception("some of the mac address characters are not correct")
+               else:
+                   self.src_mac=mac_address
+                   self.convert_mac_to_binary(parts_mac)
+           else:
+               raise Exception ("The mac address length is wrong")
+
+       elif ("-" in mac_address):
+           parts_mac = mac_address.split("-")
+           if (len(parts_mac) == 6):
+               if (self.parse_MacAddress(parts_mac) == True):
+                   raise Exception("some of the mac address characters are not correct")
+               else:
+                   self.src_mac = mac_address
+                   self.convert_mac_to_binary(parts_mac)
+           else:
+               raise Exception("The mac address length is wrong")
+
+
+       else:
+           raise Exception ("The separation character is wrong")
+    def setlLength(self,length : int):
+        if (not isinstance(length , int)):
+            raise Exception("The length is not integer")
+        else:
+            self.payload_length = length
+    def getLength(self):
+        if self.payload_length == None:
+            raise Exception("Length not set")
+            return None
+        else:
+            return self.payload_length
+    def convert_mac_to_binary(self,mac_address_lst):
+        self.src_mac_binary=converter.return_binary_from_hex_string(mac_address_lst)
+
+    def parse_MacAddress(self,parts_mac):
+        global incorrect
+        incorrect = False
+        for part in parts_mac:
+
+            for character in part:
+                if (not character.isdigit() and not character.upper() == 'A'
+                                        and not character.upper() == 'B'
+                                        and not character.upper() == 'C'
+                                        and not character.upper() == 'D'
+                                        and not character.upper() == 'E'):
+                    incorrect = True
+
+                    break
+            else:
+                print ("BREAK")
+                break
+        return incorrect
+    def getBinary(self):
+        if (len(self.src_mac_binary) > 0  and self.payload_length != None and self.src_mac_binary != None):
+           eth_frame = self.dst_mac_binary + self.src_mac_binary + struct.pack(">HBBB",self.payload_length ,self.dsap, self.ssap,self.control_field)
+        else:
+            raise Exception("Missing parameters in the ethernet frame")
+        return eth_frame
+
+
+class ISIS_Packet:
+
+    def __init__(self):
+        self.hello = None
+        self.fix_header = None
+        self.eth_frame= None
+
+    def createHelloPacket(self):
+        self.hello = ISIS_HELLO()
+    def createEthernetFrame(self):
+        self.eth_frame = ETHERNET_Frame()
+    def getEthernetFrame (self) -> ETHERNET_Frame:
+        return self.eth_frame
+
+    def getHello(self) -> ISIS_HELLO:
+        if (self.hello != None):
+            return self.hello
+        else:
+            return None
+
+    def createFixHeader(self):
+        self.fix_header = ISIS_FixHeader()
+    def getFixHeader(self) -> ISIS_FixHeader:
+        if (self.fix_header != None):
+            return self.fix_header
+        else:
+            raise Exception("Fix header has not been created")
+            return None
+
+
+
+
+# nterface,holdtime,level,int_type,system_id,area_id
+class Neighbor(threading.Thread):
+     def __init__(self,interface):
+
+        self.socket = socket(AF_PACKET, SOCK_RAW, htons(3))
+        # s.bind(("eno1", 0x0801))
+        self.socket.bind((interface, 0))
+
+        self.recv_isis_packet = None
+        self.send_isis_packet = None
+        self.recv_holdtime = -1
+        self.hello_binary_complete=b''
+        self.neighbor = 2
+
+
+        threading.Thread.__init__(self)
+     def getSRC_MAC(self):
+         ifName, ifProto, pktType, hwType, hwAddr = self.socket.getsockname()
+         return hwAddr
+     def createISISPacketSend(self):
+         self.send_isis_packet =  ISIS_Packet()
+     def getISISPacketSend(self) ->  ISIS_Packet:
+         if (self.send_isis_packet ==  None):
+             raise Exception ("ISIS packet not created")
+             return  None
+         return self.send_isis_packet
+     def getISISPacketSend(self) ->  ISIS_Packet:
+         if (self.send_isis_packet==  None):
+             return  None
+         else:
+             return self.send_isis_packet
+
+     def getISISPacketRecv(self) ->  ISIS_Packet:
+         if (self.recv_isis_packet==  None):
+             return  None
+         else:
+             return self.recv_isis_packet
+     def isis_Neighbor_status(self):
+         return self.neighbor
+     def run (self):
+        #self.send_isis_packet = ISIS_Packet()
+        #self.send_isis_packet.createFixHeader()
+        #self.send_isis_packet.createHelloPacket()
+        #self.send_isis_packet.createEthernetFrame()
+        self.recv_isis_packet = ISIS_Packet()
+        self.recv_isis_packet.createFixHeader()
+        self.recv_isis_packet.createHelloPacket()
+        x = threading.Thread(target=self.receivepackets, args=())
+        y = threading.Thread(target=self.sendHellopackets, args=())
+        #y = threading.Thread(target=self.reduceHoldTime, args=())
+
+        x.start()
+        y.start()
+        #y.start()
+
+        #fix_header = self.send_isis_packet.getFixHeader()
+        #fix_header.populateFixFields()
+
+
+            #pass
+            #send packets
+     def getHelloBinary(self):
+        if (len(self.hello_binary) == 0):
+            raise Exception('The hello packet length cannot be zero')
+
+        return self.hello_binary
+     def sendHellopackets(self):
+         global hello_interval
+         hello_interval = 2
+         if (self.send_isis_packet != None):
+             while (1):
+                 time.sleep(hello_interval)
+                 all_tlvs_binary = self.send_isis_packet.getHello().getTLVsBinary()
+                 hello_binary = self.send_isis_packet.getHello().getBinary()
+                 fix_header_binary = self.send_isis_packet.getFixHeader().getBinary()
+                 eth_frame_binary = self.send_isis_packet.getEthernetFrame().getBinary()
+
+
+                 self.hello_binary_complete =  eth_frame_binary  + fix_header_binary +  hello_binary + all_tlvs_binary
+                 #print(self.hello_binary_complete)
+                 #print (all_tlvs_binary)
+                 if (len(self.hello_binary_complete) != 0):
+                     pass
+                     self.socket.send(self.hello_binary_complete)
+                     #send the packet
+                 else:
+                     raise Exception ("packet length not correct")
+                 if (self.recv_holdtime != -1):
+                     hello_interval = int(self.recv_holdtime /3 )
+         else:
+             raise Exception ("ISIS Packet  has not been created ")
+
+         pass
+     def receivepackets(self):
+
+        fix=self.recv_isis_packet.getFixHeader()
+
+
+        #recvpacket = b'\x01\x00^\x90\x00\x02RT\x00\x82\\4\x05\xdc\xfe\xfe\x03\x83\x14\x01\x00\x11\x01\x00\x00\x02\x00\x00\x00\x00\x00\x03\x00\x1e\x05\xd9\x00\xf0\x05\x02\x00\x00\x00\x0e\x07\x04\x00d\x00\x00\x81\x01\xcc\xd3\x03\x04\x00\x00\x01\x04\x03I\x00\x01\x84\x04\xc0\xa8M\x12\x08\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x9d\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        while (1):
+            print ("Receving packets")
+            recvpacket = self.socket.recv(5000)
+            #print (recvpacket)
+            dst_mac=recvpacket[:6]
+            #print (dst_mac)
+            dst_mac1, dst_mac2, dst_mac3, dst_mac4, dst_mac5, dst_mac6 = struct.unpack("BBBBBB" , dst_mac)
+            src_mac = recvpacket[6:12]
+            #print (src_mac)
+            src_mac1, src_mac2, src_mac3, src_mac4, src_mac5, src_mac6 = struct.unpack("BBBBBB", src_mac)
+            fixheader = recvpacket[17:25]
+            #print(fixheader)
+            fix.setValuesFromStream(fixheader)
+            #print ("PType",fix.protocolType)
+            #print ( recvpacket[15:16], recvpacket[14:15])
+            #print (struct.unpack("B",recvpacket[15:16]) )
+            if (struct.unpack("B",recvpacket[15:16])[0] == 254 and
+                    struct.unpack("B", recvpacket[14:15])[0] == 254):
+                #print ("ISIS Packet")
+
+
+
+                if (fix.protocolType == 17):
+                    #print ("HELLO",recvpacket[25:37])
+
+                    hello_stream = recvpacket[25:37]
+                    self.parseHello(hello_stream)
+                    leftcounter = 37
+                    self.pasrseTLVs( recvpacket, leftcounter)
+                elif (fix.protocolType == 25):
+                     print ("CSNP",recvpacket[25:] )
+                elif (fix.protocolType == 20):
+                     print("LSP", recvpacket[25:] )
+                else:
+                    raise Exception("Fix Header protocol type is wrong")
+
+                if (self.recv_holdtime == 0):
+                    break
+
+        #routing_domain1 = struct.unpack("B",routing_domain)
+        #print(dst_mac1, dst_mac2, dst_mac3, dst_mac4, dst_mac5, dst_mac6)
+        #print ( src_mac1, src_mac2, src_mac3, src_mac4, src_mac5, src_mac6 )
+     def parseHello(self,stream):
+             hello = self.recv_isis_packet.getHello()
+             print ("HELLO LEN",len(stream))
+             hello.populateHelloFieldsFromStream(stream)
+             self.recv_holdtime=hello.getHoldTime()
+
+
+     def parseLSP(self,stream):
+         pass
+     def parseCSNP(self,stream):
+         pass
+     def parsePSNP(self,stream):
+         pass
+     def pasrseTLVs(self,recvpacket,leftcounter):
+         hello = self.recv_isis_packet.getHello()
+
+         while (leftcounter < len(recvpacket)):
+             initial_tlv_counter = leftcounter
+             tlv_type = struct.unpack("B", recvpacket[leftcounter:leftcounter + 1])
+             #print (tlv_type)
+             # TLV Area ID
+             if (int(tlv_type[0]) == 240):
+                 tlv_p2p = TLV_P2P_Adjacency_State()
+
+                 returned_tlv = hello.get_tlv(tlv_p2p )
+                 # print("TLV TYPE", tlv_type)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 # print("TLV LEN", tlv_length)
+                 # leftcounter += 1
+                 # tlv_value = struct.unpack("!BBBBB", recvpacket[leftcounter:leftcounter + int(tlv_length[0])])
+                 # print(tlv_value)
+                 leftcounter += int(tlv_length[0]) + 1
+                 final_tlv_counter = leftcounter
+                 # print(recvpacket[initial_tlv_counter: final_tlv_counter])
+
+                 if (returned_tlv == None):
+                     tlv_p2p.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                     hello.add_tlv(tlv_p2p)
+                     self.neighbor = 1
+                 else:
+                     if (self.neighbor != 0):
+                         returned_tlv.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                         print ("VALUE",returned_tlv.getValue() )
+                         if (returned_tlv.getValue() == 0 ):
+                             self.neighbor = 0
+                     del tlv_p2p
+                     #print (hello.get_tlv(tlv_p2p ).getValue())
+             elif (int(tlv_type[0]) == 129):
+                 #print ("129")
+                 tlv_prot_support = TLV_Protocol_Supported()
+                 returned_tlv = hello.get_tlv(tlv_prot_support)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 leftcounter += int(tlv_length[0]) + 1
+                 final_tlv_counter = leftcounter
+
+                 if (returned_tlv == None):
+                    tlv_prot_support.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                    hello.add_tlv(tlv_prot_support)
+                 else:
+                     del tlv_prot_support
+                 pass
+
+             elif (int(tlv_type[0]) == 1):
+                 # print ("129")
+                 tlv_area_id = TLV_Area_Id()
+                 returned_tlv = hello.get_tlv( tlv_area_id)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 leftcounter += int(tlv_length[0]) + 1
+                 final_tlv_counter = leftcounter
+
+                 if (returned_tlv == None):
+                     #print ("area", recvpacket[initial_tlv_counter: final_tlv_counter])
+                     tlv_area_id.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                     hello.add_tlv( tlv_area_id)
+                 else:
+                     del  tlv_area_id
+                 pass
+             elif (int(tlv_type[0]) == 132):
+                 # print ("129")
+                 tlv_int_ip = TLV_interface_ip()
+                 returned_tlv = hello.get_tlv( tlv_int_ip)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 leftcounter += int(tlv_length[0]) + 1
+                 final_tlv_counter = leftcounter
+
+                 if (returned_tlv == None):
+                     #print ("area", recvpacket[initial_tlv_counter: final_tlv_counter])
+                     tlv_int_ip.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                     hello.add_tlv( tlv_int_ip)
+                 else:
+                     del  tlv_int_ip
+                 pass
+             elif (int(tlv_type[0]) == 7):
+                 tlv_inst_id  = TLV_Instance_Id()
+                 returned_tlv = hello.get_tlv(tlv_inst_id)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 leftcounter += int(tlv_length[0]) + 1
+                 final_tlv_counter = leftcounter
+
+                 if (returned_tlv == None):
+                     # print ("area", recvpacket[initial_tlv_counter: final_tlv_counter])
+                     tlv_inst_id.setValuesFromBinary(recvpacket[initial_tlv_counter: final_tlv_counter])
+                     hello.add_tlv(tlv_inst_id)
+                 else:
+                     del tlv_inst_id
+                 pass
+                 #TLV_Instance_Id
+             else:
+
+                 # print("TLV TYPE", tlv_type)
+                 leftcounter += 1
+                 tlv_length = struct.unpack("!B", recvpacket[leftcounter:leftcounter + 1])
+                 # print("TLV LEN", tlv_length)
+                 leftcounter += int(tlv_length[0]) + 1
+
+     def reduceHoldTime (self):
+         while (1):
+             time.sleep(1)
+
+             if (self.recv_holdtime != -1 and self.neighbor == 0):
+                 self.recv_holdtime -= 1
+                 if (self.recv_holdtime == 0):
+                     self.neighbor = 2
+                     break
+
+
+class converter:
+  @classmethod
+  def return_binary_from_hex_string(cls,lst_str : list):
+      global digit
+      global hexa
+      binary=b''
+      for ele in lst_str:
+          hexa=0
+          c=len(ele) - 1
+          for chr in ele:
+              digit=chr
+              if (not chr.isdigit()):
+                  digit=cls.returnNumberFromLetter(chr)
+              hexa+=int(digit)*int(math.pow(16,c))
+              c-=1
+          binary+=struct.pack('B',hexa)
+      return binary
+
+      #print (cls.returnNumberFromLetter(lst_str))
+
+
+  def returnNumberFromLetter(letter):
+      if (letter.upper() == 'A'):
+          return 10
+      elif (letter.upper() == 'B'):
+          return 11
+      elif (letter.upper() == 'C'):
+          return 12
+      elif (letter.upper() == 'D'):
+          return 13
+      elif (letter.upper() == 'E'):
+          return 14
+      elif (letter.upper() == 'F'):
+          return 15
+      else:
+          return -1
+
+
+
+
+def main():
+
+    LSP=b'\x01_\x04\xa0\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00*\xc7\xbe\x03\x07\x04\x00d\x00\x00\x01\x04\x03I\x00\x01\x81\x01\xcc\x84\x04\x02\x02\x02\x03\x86\x04\x02\x02\x02\x03\x87v\x00\x00\x00\x00`\x02\x02\x02\x03\x11\x03\x06p\x00\x00\x00\x00\x03\x04\x01 \x0b\x04\x02\x02\x02\x03\x00\x00\x00\x00`\x04\x04\x04\x02\x03\x04\x01\x80\x00\x00\x00\x00`\x17\x17\x17\x01\x11\x03\x06p\x00\x00\x00\x00r\x04\x01 \x0b\x04\x02\x02\x02\x03\x00\x00\x00\n^\xc0\xa8!\x04\x03\x04\x01\x00\x00\x00\x00\n^\xc0\xa8!\x0c\x03\x04\x01\x00\x00\x00\x00\n^\xc0\xa8!\x10\x03\x04\x01\x00\x00\x00\x00\nX\xc0\xa8M\x03\x04\x01\x00\x89\x05vsim3\xf2#\x02\x02\x02\x03\x00\x02\t\x80\x00\x07\xd1\x01\x03\x00>\x80\x16\t\x00\x00\x03\xe8\x01\x03\x00:\x98\x17\x02\x01\n\x13\x02\x00\x01\x16\x833333""\x00\x00\x00\nx\x04\x08\x00\x00\x00\x0e\x00\x00\x024\x06\x04\xc0\xa8M\x12\x08\x04\xc0\xa8M\x11\x03\x04\x00\x00\x00\x00\t\x04L\xeek(\n\x04\x00\x00\x00\x00\x0b \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x12\x03\x00\x00\n\xfc \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1f\x050\x00\x00]\xc3'
+
+    leftcounter=4
+    rightcounter =6
+    checksum =0
+    print (LSP[4:6])
+    while (rightcounter < len(LSP)):
+        #if (leftcounter != 16 ):
+        chunk = struct.unpack("H",LSP[leftcounter:rightcounter])[0]
+        #else:
+        #print (LSP[leftcounter:rightcounter])
+        #chunk = 0
+        checksum+=chunk
+        if (checksum > 65535):
+
+           b = (checksum & 983040) >> 16
+           c = (checksum & 65535)
+           checksum = b + c
+        rightcounter+=2
+        leftcounter +=2
+    print (checksum)
+
+    #a=149404
+    #b = (a & 983040) >> 16
+    #c = (a & 65535)
+    #print (c+b)
+    """
+    try:
+        neigh = Neighbor('br333')
+        print (neigh)
+        neigh.createISISPacketSend()
+        isis_packet=neigh.getISISPacketSend()
+        print (isis_packet)
+        isis_packet.createFixHeader()
+        isis_packet.getFixHeader().populateFixFields()
+        isis_packet.getFixHeader().setPacketType(17)
+
+
+        isis_packet.createHelloPacket()
+        isis_packet.createEthernetFrame()
+
+
+        isis_packet.getHello().setSystemId("3333.3333.2222")
+        isis_packet.getHello().setCktType("level_2")
+        isis_packet.getHello().setHoldTime(100)
+        isis_packet.getHello().setPriority(5)
+        isis_packet.getHello().generateLocalCktId()
+        isis_packet.getHello().setInterfaceType("p2p")
+
+        tlv1 = TLV_Protocol_Supported()
+        tlv1.setType(129)
+        tlv1.setValue(204)
+        tlv1.setLength(1)
+        isis_packet.getHello().add_tlv(tlv1)
+
+        p2p = TLV_P2P_Adjacency_State()
+        p2p.setType(240)
+        p2p.setValue(neigh.isis_Neighbor_status())
+        p2p.generateExtCkt()
+        p2p.setLength(5)
+
+        isis_packet.getHello().add_tlv(p2p)
+        #p2p = isis_packet.getHello().get_tlv(p2p)
+        #p2p.setValue(2)
+
+        area_id = TLV_Area_Id()
+        area_id.setValue("49.0001")
+        area_id.setType(1)
+        area_id.setLength(4)
+        isis_packet.getHello().add_tlv(area_id)
+
+        int_ip = TLV_interface_ip()
+        int_ip.setValue("192.168.77.17")
+        int_ip.setType(132)
+        int_ip.setLength(4)
+        isis_packet.getHello().add_tlv(int_ip)
+
+        instance_id= TLV_Instance_Id()
+        instance_id.setValue(100)
+        instance_id.setType(7)
+        instance_id.setLength(4)
+        isis_packet.getHello().add_tlv(instance_id)
+
+        isis_packet.getEthernetFrame().setSourceMac("00:00:01:A1:03:02")
+        len_TLVs= len(isis_packet.getHello().getTLVsBinary())
+        isis_packet.getHello().setPDULength(0)
+        len_hello = len(isis_packet.getHello().getBinary())
+        len_fix_header = len(isis_packet.getFixHeader().getBinary())
+        isis_packet.getHello().setPDULength(len_TLVs +len_hello + len_fix_header)
+        isis_packet.getEthernetFrame().setlLength( len_TLVs +len_hello + len_fix_header + 3)
+        #all_tlvs_binary=isis_packet.getHello().getTLVsBinary()
+        #hello_binary=isis_packet.getHello().getBinary()
+        #fix_header_binary=isis_packet.getFixHeader().getBinary()
+        neigh.start()
+
+
+        while (1):
+            time.sleep(1)
+
+            if ( neigh.isis_Neighbor_status() == 1):
+                p2p1 = TLV_P2P_Adjacency_State()
+                return_p2p=isis_packet.getHello().get_tlv(p2p1)
+                return_p2p.setValue(1)
+                del p2p1
+            elif ( neigh.isis_Neighbor_status() == 0):
+                p2p1 = TLV_P2P_Adjacency_State()
+                return_p2p = isis_packet.getHello().get_tlv(p2p1)
+                return_p2p.setValue(0)
+                del p2p1
+                break
+        
+        print("Value", isis_packet.getHello().get_tlv(p2p).getValue())
+
+        #isis_packet.getHello().setPDULength(1497)
+        #neigh.start()
+    except ValueError as err:
+
+        tb.print_exc()
+    """
+    """
+    try:
+        isis_packet = ISIS_Packet()
+        isis_packet.createHelloPacket("p2p")
+        isis_packet.getHello().setSystemId("3333.3333.2222")
+        isis_packet.getHello().setCktType("level_2")
+        isis_packet.getHello().setHoldTime(200)
+        isis_packet.getHello().setPriority(5)
+        isis_packet.getHello().generateLocalCktId()
+        isis_packet.getHello().setPDULength(1497)
+
+        tlv1 = TLV_Protocol_Supported()
+        tlv1.setType(129)
+        tlv1.setValue(204)
+        tlv1.setLength(1)
+        isis_packet.getHello().add_tlv(tlv1)
+
+
+        p2p =  TLV_P2P_Adjacency_State()
+        p2p.setType(240)
+        p2p.setValue(1)
+        p2p.setLength(1)
+        isis_packet.getHello().add_tlv(p2p)
+        p2p =  isis_packet.getHello().get_tlv(p2p)
+        p2p.setValue(2)
+        print ("Value",isis_packet.getHello().get_tlv(p2p).getValue())
+
+        area_id = TLV_Area_Id()
+        area_id.setValue("49.0001")
+        area_id.setType(1)
+        area_id.setLength(4)
+        isis_packet.getHello().add_tlv(area_id)
+
+        int_ip = TLV_interface_ip()
+        int_ip.setValue("10.0.0.11")
+        int_ip.setType(132)
+        int_ip.setLength(4)
+        isis_packet.getHello().add_tlv(int_ip)
+
+        isis_packet.createFixHeader()
+
+
+        print(  isis_packet.getFixHeader().getBinary() + isis_packet.getHello().getBinary() )
+    except ValueError as err:
+
+        tb.print_exc()
+    """
+if __name__ == '__main__':
+    main()
